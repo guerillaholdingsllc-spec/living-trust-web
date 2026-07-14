@@ -1,5 +1,62 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? `${import.meta.env.BASE_URL}api` : "http://localhost:8080");
 
+function authHeaders() {
+  const token = localStorage.getItem("livingtrust_token");
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
+export async function registerAccount(payload) {
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Unable to create account");
+  localStorage.setItem("livingtrust_token", data.token);
+  localStorage.setItem("livingtrust_user", JSON.stringify(data.user));
+  return data;
+}
+
+export async function loginAccount(payload) {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Unable to sign in");
+  localStorage.setItem("livingtrust_token", data.token);
+  localStorage.setItem("livingtrust_user", JSON.stringify(data.user));
+  return data;
+}
+
+export async function getCurrentAccount() {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, { headers: authHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Unable to load account");
+  localStorage.setItem("livingtrust_user", JSON.stringify(data.user));
+  return data;
+}
+
+export async function requestPasswordReset(payload) {
+  const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Unable to send password reset");
+  return data;
+}
+
+export async function getMyTrusts() {
+  const response = await fetch(`${API_BASE_URL}/auth/my-trusts`, { headers: authHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Unable to load saved trusts");
+  return data;
+}
+
 export async function generateTrust(payload) {
   const response = await fetch(`${API_BASE_URL}/generate-trust`, {
     method: "POST",

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { generateTrust, getIntakeAssist, getLeadBrief, getOperationsBrief, saveIntakeDraft, startMaintenanceSubscription } from "./api.js";
+import { useEffect, useMemo, useState } from "react";
+import { generateTrust, getCurrentAccount, getIntakeAssist, getLeadBrief, getMyTrusts, getOperationsBrief, loginAccount, registerAccount, requestPasswordReset, saveIntakeDraft, startMaintenanceSubscription } from "./api.js";
 
 const TRUST_CLAUSES = [
   { id: "spendthrift", name: "Spendthrift Clause", status: "requested", category: "Asset Protection", risk: "HIGH", description: "Protects beneficiary interests from creditors, lawsuits, transfers, and poor financial decisions before distribution.", questionnaire: ["Do any beneficiaries have known creditor issues or pending lawsuits?", "Are there beneficiaries with spending or addiction concerns?", "Should distributions be limited to health, education, maintenance, and support?"] },
@@ -95,11 +95,25 @@ const riskClass = {
 const asset = (path) => `${import.meta.env.BASE_URL}${path.replace(/^\//, "")}`;
 
 export default function LivingTrustFramework() {
+  const path = window.location.pathname.toLowerCase();
+  const isGeneratorRoute = path.includes("/livingtrust");
   const params = new URLSearchParams(window.location.search);
   const returnNotice = params.get("trustId")
     ? `Trust intake ${params.get("trustId")} was received. Attorney review and document delivery require the production backend credentials to be configured.`
     : "";
-  const [activeTab, setActiveTab] = useState("start");
+  const [activeTab, setActiveTab] = useState(isGeneratorRoute ? "start" : "landing");
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("livingtrust_user") || "null");
+    } catch (_error) {
+      return null;
+    }
+  });
+  const [authMode, setAuthMode] = useState("login");
+  const [authOpen, setAuthOpen] = useState(isGeneratorRoute && !user);
+  const [authForm, setAuthForm] = useState({ fullName: "", email: "", password: "" });
+  const [authStatus, setAuthStatus] = useState({ state: "idle", message: "" });
+  const [accountTrusts, setAccountTrusts] = useState([]);
   const [category, setCategory] = useState("All");
   const [expanded, setExpanded] = useState("incapacity");
   const [selected, setSelected] = useState(() => TRUST_CLAUSES.map((c) => c.id));
@@ -143,8 +157,87 @@ export default function LivingTrustFramework() {
   const criticalCount = TRUST_CLAUSES.filter((c) => c.risk === "CRITICAL").length;
   const selectedClauses = useMemo(() => TRUST_CLAUSES.filter((c) => selected.includes(c.id)), [selected]);
 
+  useEffect(() => {
+    const token = localStorage.getItem("livingtrust_token");
+    if (!token) return;
+    getCurrentAccount()
+      .then(({ user: account }) => {
+        setUser(account);
+        setForm((current) => ({
+          ...current,
+          fullName: current.fullName || account.fullName || "",
+          email: current.email || account.email || ""
+        }));
+        return getMyTrusts();
+      })
+      .then(({ trusts }) => setAccountTrusts(trusts || []))
+      .catch(() => {
+        localStorage.removeItem("livingtrust_token");
+        localStorage.removeItem("livingtrust_user");
+        setUser(null);
+        if (isGeneratorRoute) setAuthOpen(true);
+      });
+  }, [isGeneratorRoute]);
+
   function updateField(event) {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+  }
+
+  function updateAuthField(event) {
+    setAuthForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+  }
+
+  async function submitAuth(event) {
+    event.preventDefault();
+    setAuthStatus({ state: "loading", message: authMode === "register" ? "Creating account..." : "Signing in..." });
+    try {
+      const action = authMode === "register" ? registerAccount : loginAccount;
+      const { user: account } = await action(authForm);
+      setUser(account);
+      setAuthOpen(false);
+      setAuthStatus({ state: "success", message: "Signed in." });
+      setForm((current) => ({
+        ...current,
+        fullName: current.fullName || account.fullName || authForm.fullName || "",
+        email: current.email || account.email || authForm.email || ""
+      }));
+      const { trusts } = await getMyTrusts();
+      setAccountTrusts(trusts || []);
+      if (!isGeneratorRoute) window.location.href = "/livingtrust/";
+    } catch (error) {
+      setAuthStatus({ state: "error", message: error.message });
+    }
+  }
+
+  async function sendResetEmail() {
+    if (!authForm.email) {
+      setAuthStatus({ state: "error", message: "Enter your email first." });
+      return;
+    }
+    setAuthStatus({ state: "loading", message: "Sending reset link..." });
+    try {
+      const result = await requestPasswordReset({ email: authForm.email });
+      setAuthStatus({ state: "success", message: result.message });
+    } catch (error) {
+      setAuthStatus({ state: "error", message: error.message });
+    }
+  }
+
+  function signOut() {
+    localStorage.removeItem("livingtrust_token");
+    localStorage.removeItem("livingtrust_user");
+    setUser(null);
+    setAccountTrusts([]);
+    if (isGeneratorRoute) setAuthOpen(true);
+  }
+
+  function startIntake() {
+    if (!user) {
+      setAuthOpen(true);
+      return;
+    }
+    if (!isGeneratorRoute) window.location.href = "/livingtrust/";
+    else setActiveTab("start");
   }
 
   function toggleClause(id) {
@@ -162,6 +255,11 @@ export default function LivingTrustFramework() {
 
   async function submitPackage(event) {
     event.preventDefault();
+    if (!user) {
+      setAuthOpen(true);
+      setStatus({ state: "error", message: "Sign in before generating a trust package." });
+      return;
+    }
     if (selectedTier === "maintenance") {
       await startMaintenanceCheckout();
       return;
@@ -272,12 +370,13 @@ export default function LivingTrustFramework() {
           </div>
           <div className="navLinks">
             <button onClick={() => setActiveTab("landing")}>Overview</button>
-            <button onClick={() => setActiveTab("start")}>Intake</button>
+            <button onClick={startIntake}>Intake</button>
             <button onClick={() => setActiveTab("clauses")}>Protections</button>
             <button onClick={() => setActiveTab("legal")}>Review</button>
             <button onClick={() => setActiveTab("resources")}>Resources</button>
             <button onClick={() => setActiveTab("command")}>Case Desk</button>
             <button onClick={() => setActiveTab("marketing")}>Marketing</button>
+            {user ? <button onClick={signOut}>Sign Out</button> : <button onClick={() => setAuthOpen(true)}>Sign In</button>}
           </div>
         </nav>
         <div className="heroContent">
@@ -285,7 +384,7 @@ export default function LivingTrustFramework() {
           <h1>Protect your family plan before probate decides for you.</h1>
           <p>Prepare a state-specific living trust package, organize your successor trustee instructions, and create a clean review file to discuss with a licensed attorney before signing.</p>
           <div className="heroActions">
-            <button className="primary" onClick={() => setActiveTab("start")}>Start confidential intake</button>
+            <button className="primary" onClick={startIntake}>Start confidential intake</button>
             <button className="secondary" onClick={() => setActiveTab("landing")}>Review the process</button>
           </div>
           <div className="heroCredentials">
@@ -311,6 +410,38 @@ export default function LivingTrustFramework() {
             <p>{returnNotice}</p>
           </div>
         </section>
+      )}
+
+      {user && (
+        <section className="accountBar">
+          <div>
+            <strong>{user.fullName || user.email}</strong>
+            <span>{accountTrusts.length} saved trust{accountTrusts.length === 1 ? "" : "s"}</span>
+          </div>
+          <button className="quietButton" onClick={startIntake}>Continue intake</button>
+        </section>
+      )}
+
+      {authOpen && (
+        <div className="authOverlay">
+          <form className="authPanel" onSubmit={submitAuth}>
+            <button type="button" className="authClose" onClick={() => !isGeneratorRoute && setAuthOpen(false)}>×</button>
+            <span className="eyebrow dark">{authMode === "register" ? "Create account" : "Sign in"}</span>
+            <h2>{authMode === "register" ? "Create your private trust account." : "Sign in to continue your trust intake."}</h2>
+            <p>Your account saves your intake and connects completed trust packages to your profile.</p>
+            {authMode === "register" && (
+              <label>Full name<input name="fullName" value={authForm.fullName} onChange={updateAuthField} autoComplete="name" /></label>
+            )}
+            <label>Email<input required type="email" name="email" value={authForm.email} onChange={updateAuthField} autoComplete="email" /></label>
+            <label>Password<input required type="password" name="password" value={authForm.password} onChange={updateAuthField} autoComplete={authMode === "register" ? "new-password" : "current-password"} /></label>
+            <button className="primary" disabled={authStatus.state === "loading"}>{authMode === "register" ? "Create Account" : "Sign In"}</button>
+            <button type="button" className="quietButton" onClick={() => setAuthMode(authMode === "register" ? "login" : "register")}>
+              {authMode === "register" ? "I already have an account" : "Create an account"}
+            </button>
+            <button type="button" className="linkButton" onClick={sendResetEmail}>Forgot password?</button>
+            {authStatus.message && <p className={`status ${authStatus.state}`}>{authStatus.message}</p>}
+          </form>
+        </div>
       )}
 
       {(activeTab === "landing" || activeTab === "start") && (

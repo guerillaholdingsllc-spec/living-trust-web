@@ -116,6 +116,107 @@ button {
   margin: auto 0 8vh clamp(20px, 6vw, 92px);
 }
 
+.accountBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  width: min(1180px, calc(100% - 40px));
+  margin: -34px auto 34px;
+  position: relative;
+  z-index: 3;
+  background: #ffffff;
+  border: 1px solid #e4d9c8;
+  box-shadow: 0 18px 42px rgba(18, 28, 43, 0.12);
+  border-radius: 18px;
+  padding: 18px 22px;
+}
+
+.accountBar strong,
+.accountBar span {
+  display: block;
+}
+
+.accountBar span {
+  color: #687386;
+  font-size: 13px;
+  margin-top: 3px;
+}
+
+.authOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 17, 31, 0.72);
+  padding: 22px;
+}
+
+.authPanel {
+  width: min(460px, 100%);
+  background: #fff;
+  color: #182132;
+  border-radius: 20px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.28);
+  padding: 28px;
+  position: relative;
+}
+
+.authPanel h2 {
+  margin: 8px 0 8px;
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.authPanel p {
+  color: #687386;
+  line-height: 1.6;
+}
+
+.authPanel label {
+  display: block;
+  font-weight: 700;
+  color: #24324a;
+  margin: 14px 0;
+}
+
+.authPanel input {
+  width: 100%;
+  margin-top: 7px;
+  border: 1px solid #d8cdbb;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fffdf9;
+}
+
+.authPanel .primary,
+.authPanel .quietButton,
+.authPanel .linkButton {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.authClose {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: #f3eadc;
+  color: #24324a;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.linkButton {
+  background: transparent;
+  color: #254b7c;
+  text-decoration: underline;
+  padding: 8px 0;
+}
+
 .eyebrow {
   display: block;
   color: #d8b56a;
