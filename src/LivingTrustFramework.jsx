@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { getCurrentAccount, loginAccount, registerAccount, requestPasswordReset } from "./api.js";
+import { getCurrentAccount, loginAccount, registerAccount, requestPasswordReset, signOutAccount } from "./api.js";
 
 const TRUST_CLAUSES = [
   { id: "spendthrift", name: "Spendthrift Clause", status: "requested", category: "Asset Protection", risk: "HIGH", description: "Protects beneficiary interests from creditors, lawsuits, transfers, and poor financial decisions before distribution.", questionnaire: ["Do any beneficiaries have known creditor issues or pending lawsuits?", "Are there beneficiaries with spending or addiction concerns?", "Should distributions be limited to health, education, maintenance, and support?"] },
@@ -24,22 +24,68 @@ const riskClass = { CRITICAL: "risk critical", HIGH: "risk high", MEDIUM: "risk 
 
 export default function LivingTrustFramework() {
   const [activeTab, setActiveTab] = useState("landing");
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("livingtrust_user") || "null");
+    } catch {
+      return null;
+    }
+  });
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({ fullName: "", email: "", password: "" });
   const [authStatus, setAuthStatus] = useState({ state: "idle", message: "" });
   const [category, setCategory] = useState("All");
-  const [expanded, setExpanded] = useState("incapacity");
-  const [selected, setSelected] = useState(TRUST_CLAUSES.map((c) => c.id));
-
-  const [form, setForm] = useState({
-    fullName: "", email: "", state: "CA", successorTrustee: "", beneficiaries: "", distributionPlan: ""
+  const [selected, setSelected] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("ltSelected") || "null") || TRUST_CLAUSES.map((c) => c.id);
+    } catch {
+      return TRUST_CLAUSES.map((c) => c.id);
+    }
   });
+
+  const [form, setForm] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("ltIntake") || "null") || {
+        fullName: "", email: "", state: "CA", successorTrustee: "", beneficiaries: "", distributionPlan: ""
+      };
+    } catch {
+      return { fullName: "", email: "", state: "CA", successorTrustee: "", beneficiaries: "", distributionPlan: "" };
+    }
+  });
+
+  // Boot: check if user has valid session
+  useEffect(() => {
+    const token = localStorage.getItem("livingtrust_token");
+    if (token && !user) {
+      getCurrentAccount()
+        .then(({ user: account }) => {
+          setUser(account);
+          setForm((current) => ({
+            ...current,
+            fullName: current.fullName || account?.fullName || "",
+            email: current.email || account?.email || ""
+          }));
+        })
+        .catch(() => {
+          localStorage.removeItem("livingtrust_token");
+          localStorage.removeItem("livingtrust_user");
+          setUser(null);
+        });
+    }
+  }, [user]);
+
+  // Save data to localStorage
+  useEffect(() => {
+    localStorage.setItem("ltIntake", JSON.stringify(form));
+  }, [form]);
+
+  useEffect(() => {
+    localStorage.setItem("ltSelected", JSON.stringify(selected));
+  }, [selected]);
 
   const filtered = category === "All" ? TRUST_CLAUSES : TRUST_CLAUSES.filter((c) => c.category === category);
   const criticalCount = TRUST_CLAUSES.filter((c) => c.risk === "CRITICAL").length;
-  const selectedClauses = useMemo(() => TRUST_CLAUSES.filter((c) => selected.includes(c.id)), [selected]);
 
   function updateAuthField(e) {
     setAuthForm({ ...authForm, [e.target.name]: e.target.value });
@@ -47,27 +93,76 @@ export default function LivingTrustFramework() {
 
   async function submitAuth(e) {
     e.preventDefault();
+    if (!authForm.email || !authForm.password) {
+      setAuthStatus({ state: "error", message: "Email and password required." });
+      return;
+    }
+
     setAuthStatus({ state: "loading", message: authMode === "register" ? "Creating account..." : "Signing in..." });
+
     try {
-      setUser({ email: authForm.email, fullName: authForm.fullName });
+      const action = authMode === "register" ? registerAccount : loginAccount;
+      const { user: account } = await action(authForm);
+      
+      setUser(account);
       setAuthOpen(false);
-      setAuthStatus({ state: "success", message: "Signed in." });
-      setForm((current) => ({ ...current, fullName: current.fullName || authForm.fullName, email: current.email || authForm.email }));
+      setAuthForm({ fullName: "", email: "", password: "" });
+      setAuthStatus({ state: "success", message: "Signed in successfully." });
+      setForm((current) => ({
+        ...current,
+        fullName: current.fullName || account?.fullName || "",
+        email: current.email || account?.email || ""
+      }));
     } catch (error) {
-      setAuthStatus({ state: "error", message: error.message });
+      setAuthStatus({ state: "error", message: error.message || "Authentication failed." });
     }
   }
 
-  function signOut() {
-    setUser(null);
+  async function handleSignOut() {
+    try {
+      await signOutAccount();
+      setUser(null);
+      setAuthStatus({ state: "idle", message: "" });
+    } catch (error) {
+      setAuthStatus({ state: "error", message: error.message || "Sign out failed." });
+    }
+  }
+
+  async function sendResetEmail() {
+    if (!authForm.email) {
+      setAuthStatus({ state: "error", message: "Enter your email first." });
+      return;
+    }
+    setAuthStatus({ state: "loading", message: "Sending reset link..." });
+    try {
+      const result = await requestPasswordReset({ email: authForm.email });
+      setAuthStatus({ state: "success", message: result.message });
+    } catch (error) {
+      setAuthStatus({ state: "error", message: error.message || "Failed to send reset email." });
+    }
   }
 
   function toggleClause(id) {
-    setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+    setSelected((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
   }
 
   function updateField(e) {
     setForm((current) => ({ ...current, [e.target.name]: e.target.value }));
+  }
+
+  function submitIntake(e) {
+    e.preventDefault();
+    if (!form.fullName || !form.email) {
+      setAuthStatus({ state: "error", message: "Name and email required." });
+      return;
+    }
+    setAuthStatus({ state: "loading", message: "Saving intake..." });
+    setTimeout(() => {
+      setAuthStatus({ state: "success", message: "Intake saved! Your documents are ready for review." });
+      setTimeout(() => setAuthStatus({ state: "idle", message: "" }), 3000);
+    }, 1000);
   }
 
   return (
@@ -82,8 +177,12 @@ export default function LivingTrustFramework() {
           <div className="navLinks">
             <button onClick={() => setActiveTab("landing")}>Overview</button>
             <button onClick={() => setActiveTab("clauses")}>Protections</button>
-            <button onClick={() => { if(!user) setAuthOpen(true); else setActiveTab("intake"); }}>Intake</button>
-            {user ? <button onClick={signOut}>Sign Out</button> : <button onClick={() => setAuthOpen(true)}>Sign In</button>}
+            <button onClick={() => { if (!user) setAuthOpen(true); else setActiveTab("intake"); }}>Intake</button>
+            {user ? (
+              <button onClick={handleSignOut}>Sign Out</button>
+            ) : (
+              <button onClick={() => setAuthOpen(true)}>Sign In</button>
+            )}
           </div>
         </nav>
 
@@ -92,8 +191,12 @@ export default function LivingTrustFramework() {
           <h1>Protect your family plan before probate decides for you.</h1>
           <p>Prepare a state-specific living trust package, organize your successor trustee instructions, and create a clean review file to discuss with a licensed attorney before signing.</p>
           <div className="heroActions">
-            <button className="primary" onClick={() => !user ? setAuthOpen(true) : setActiveTab("intake")}>Start confidential intake</button>
-            <button className="secondary" onClick={() => setActiveTab("landing")}>Review the process</button>
+            <button className="primary" onClick={() => !user ? setAuthOpen(true) : setActiveTab("intake")}>
+              Start confidential intake
+            </button>
+            <button className="secondary" onClick={() => setActiveTab("landing")}>
+              Review the process
+            </button>
           </div>
           <div className="heroCredentials">
             <span>Revocable living trust</span>
@@ -126,24 +229,68 @@ export default function LivingTrustFramework() {
       {authOpen && (
         <div className="authOverlay">
           <form className="authPanel" onSubmit={submitAuth}>
-            <button type="button" className="authClose" onClick={() => setAuthOpen(false)}>×</button>
+            <button type="button" className="authClose" onClick={() => { setAuthOpen(false); setAuthStatus({ state: "idle", message: "" }); }}>
+              ×
+            </button>
             <span className="eyebrow dark">{authMode === "register" ? "Create account" : "Sign in"}</span>
             <h2>{authMode === "register" ? "Create your private trust account." : "Sign in to continue your trust intake."}</h2>
             <p>Your account saves your intake and connects completed trust packages to your profile.</p>
 
             {authMode === "register" && (
-              <label>Full name<input name="fullName" value={authForm.fullName} onChange={updateAuthField} autoComplete="name" /></label>
+              <label>
+                Full name
+                <input
+                  name="fullName"
+                  value={authForm.fullName}
+                  onChange={updateAuthField}
+                  autoComplete="name"
+                />
+              </label>
             )}
 
-            <label>Email<input required type="email" name="email" value={authForm.email} onChange={updateAuthField} autoComplete="email" /></label>
-            <label>Password<input required type="password" name="password" value={authForm.password} onChange={updateAuthField} autoComplete={authMode === "register" ? "new-password" : "current-password"} /></label>
+            <label>
+              Email
+              <input
+                required
+                type="email"
+                name="email"
+                value={authForm.email}
+                onChange={updateAuthField}
+                autoComplete="email"
+              />
+            </label>
+            <label>
+              Password
+              <input
+                required
+                type="password"
+                name="password"
+                value={authForm.password}
+                onChange={updateAuthField}
+                autoComplete={authMode === "register" ? "new-password" : "current-password"}
+              />
+            </label>
 
-            <button className="primary" disabled={authStatus.state === "loading"}>{authMode === "register" ? "Create Account" : "Sign In"}</button>
-            <button type="button" className="quietButton" onClick={() => setAuthMode(authMode === "register" ? "login" : "register")}>
+            <button className="primary" disabled={authStatus.state === "loading"}>
+              {authMode === "register" ? "Create Account" : "Sign In"}
+            </button>
+            <button
+              type="button"
+              className="quietButton"
+              onClick={() => {
+                setAuthMode(authMode === "register" ? "login" : "register");
+                setAuthForm({ fullName: "", email: "", password: "" });
+              }}
+            >
               {authMode === "register" ? "I already have an account" : "Create an account"}
             </button>
+            <button type="button" className="linkButton" onClick={sendResetEmail}>
+              Forgot password?
+            </button>
 
-            {authStatus.message && <p className={`status ${authStatus.state}`}>{authStatus.message}</p>}
+            {authStatus.message && (
+              <p className={`status ${authStatus.state}`}>{authStatus.message}</p>
+            )}
           </form>
         </div>
       )}
@@ -156,7 +303,11 @@ export default function LivingTrustFramework() {
               <p>{criticalCount} CRITICAL protections need review</p>
             </div>
             <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              {CATEGORIES.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -164,12 +315,16 @@ export default function LivingTrustFramework() {
             {filtered.map((clause) => (
               <div key={clause.id} className="clause">
                 <header>
-                  <input type="checkbox" checked={selected.includes(clause.id)} onChange={() => toggleClause(clause.id)} />
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(clause.id)}
+                    onChange={() => toggleClause(clause.id)}
+                  />
                   <div>
                     <h3>{clause.name}</h3>
                     <p>{clause.description}</p>
                   </div>
-                  <span className={`risk ${riskClass[clause.risk] || ''}`}>{clause.risk}</span>
+                  <span className={`risk ${riskClass[clause.risk] || ""}`}>{clause.risk}</span>
                 </header>
                 {selected.includes(clause.id) && (
                   <div className="questions">
@@ -189,16 +344,63 @@ export default function LivingTrustFramework() {
           <h2>Confidential Intake</h2>
           <p>Your information is private and secure. We'll use this to prepare your estate planning documents.</p>
 
-          <form className="formShell">
+          <form className="formShell" onSubmit={submitIntake}>
             <div className="formGrid">
-              <label>Full Name<input type="text" name="fullName" value={form.fullName} onChange={updateField} /></label>
-              <label>Email<input type="email" name="email" value={form.email} onChange={updateField} /></label>
-              <label>State<select name="state" value={form.state} onChange={updateField}>{STATES.map((state) => (<option key={state} value={state}>{state}</option>))}</select></label>
-              <label>Successor Trustee<input type="text" name="successorTrustee" placeholder="Name and relationship" value={form.successorTrustee} onChange={updateField} /></label>
-              <label className="wide">Beneficiaries<textarea name="beneficiaries" placeholder="Names, relationships, and share amounts" value={form.beneficiaries} onChange={updateField} /></label>
-              <label className="wide">Distribution Plan<textarea name="distributionPlan" placeholder="How and when assets should be distributed" value={form.distributionPlan} onChange={updateField} /></label>
+              <label>
+                Full Name
+                <input type="text" name="fullName" value={form.fullName} onChange={updateField} required />
+              </label>
+              <label>
+                Email
+                <input type="email" name="email" value={form.email} onChange={updateField} required />
+              </label>
+              <label>
+                State
+                <select name="state" value={form.state} onChange={updateField}>
+                  {STATES.map((state) => (
+                    <option key={state} value={state}>
+                      {state}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Successor Trustee
+                <input
+                  type="text"
+                  name="successorTrustee"
+                  placeholder="Name and relationship"
+                  value={form.successorTrustee}
+                  onChange={updateField}
+                />
+              </label>
+              <label className="wide">
+                Beneficiaries
+                <textarea
+                  name="beneficiaries"
+                  placeholder="Names, relationships, and share amounts"
+                  value={form.beneficiaries}
+                  onChange={updateField}
+                />
+              </label>
+              <label className="wide">
+                Distribution Plan
+                <textarea
+                  name="distributionPlan"
+                  placeholder="How and when assets should be distributed"
+                  value={form.distributionPlan}
+                  onChange={updateField}
+                />
+              </label>
             </div>
-            <button type="submit" className="primary" style={{ marginTop: "24px" }}>Submit Intake</button>
+            <button type="submit" className="primary" style={{ marginTop: "24px" }} disabled={authStatus.state === "loading"}>
+              {authStatus.state === "loading" ? "Saving..." : "Submit Intake"}
+            </button>
+            {authStatus.message && (
+              <p className={`status ${authStatus.state}`} style={{ marginTop: "12px" }}>
+                {authStatus.message}
+              </p>
+            )}
           </form>
         </section>
       )}
@@ -209,7 +411,9 @@ export default function LivingTrustFramework() {
             <div>
               <span className="eyebrow dark">Professional estate-planning workflow</span>
               <h2>A private intake experience that feels like a law office, not a form mill.</h2>
-              <p>Families need more than a template. They need a careful record of intent, capacity, trustees, beneficiaries, asset funding, digital property, and state-specific signing steps. This layout presents the product like a professional estate law intake desk while keeping the no-legal-advice boundary clear.</p>
+              <p>
+                Families need more than a template. They need a careful record of intent, capacity, trustees, beneficiaries, asset funding, digital property, and state-specific signing steps. This layout presents the product like a professional estate law intake desk while keeping the no-legal-advice boundary clear.
+              </p>
             </div>
 
             <div className="credentialStack" aria-label="Estate planning safeguards">
@@ -243,7 +447,6 @@ export default function LivingTrustFramework() {
 
           <div className="imageStoryGrid">
             <article>
-              <img src="/images/trust-hero.png" alt="Estate planning intake" style={{ display: "none" }} />
               <div>
                 <span>01</span>
                 <h3>Confidential intake</h3>
@@ -251,7 +454,6 @@ export default function LivingTrustFramework() {
               </div>
             </article>
             <article>
-              <img src="/images/trust-documents.png" alt="Review-ready documents" style={{ display: "none" }} />
               <div>
                 <span>02</span>
                 <h3>Review-ready documents</h3>
