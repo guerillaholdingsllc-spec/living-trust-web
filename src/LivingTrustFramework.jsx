@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 
 // Stub API functions (replace with real api.js later)
 const getCurrentAccount = async () => ({ user: null });
