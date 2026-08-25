@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -1160,3 +1159,99 @@ export default function LivingTrustFramework() {
             <div>
 
               <span className="eyebrow dark">Professional estate-planning workflow</span>
+
+              <h2>A private intake experience that feels like a law office, not a form mill.</h2>
+
+              <p>
+
+                Families need more than a template. They need a careful record of intent, capacity, trustees,
+
+                beneficiaries, asset funding, digital property, and state-specific signing steps. This layout presents
+
+                the product like a professional estate law intake desk while keeping the no-legal-advice boundary clear.
+
+              </p>
+
+            </div>
+
+            <div className="credentialStack" aria-label="Estate planning safeguards">
+
+              <article>
+
+                <strong>Private family instructions</strong>
+
+                <span>Distribution details stay organized for review and final delivery.</span>
+
+              </article>
+
+              <article>
+
+                <strong>Probate-avoidance focus</strong>
+
+                <span>Funding guidance makes the trust more than a signed document.</span>
+
+              </article>
+
+              <article>
+
+                <strong>Attorney review boundary</strong>
+
+                <span>Documents are prepared for review; customers should consult licensed counsel before signing.</span>
+
+              </article>
+
+            </div>
+
+          </div>
+
+ 
+
+          <div className="educationHero">
+
+            <img src={asset("/images/trust-education.png")} alt="Living trust planning materials" />
+
+            <div>
+
+              <span className="eyebrow dark">Living trust fundamentals</span>
+
+              <h2>Estate planning starts with control, privacy, and continuity.</h2>
+
+              <p>
+
+                A revocable living trust is a legal arrangement where a grantor places assets under trust management
+
+                during life and names who receives or controls those assets after death or incapacity. It is commonly
+
+                used to avoid probate delays, keep private family instructions out of public court filings, organize
+
+                successor trustee authority, and give financial institutions a clear path for administration.
+
+              </p>
+
+              <p>
+
+                The trust only works for assets that are properly connected to it. That is why this app generates funding
+
+                instructions for real estate, bank accounts, brokerage accounts, business interests, vehicles, and digital assets,
+
+                alongside the trust document itself.
+
+              </p>
+
+            </div>
+
+          </div>
+
+ 
+
+          <div className="imageStoryGrid">
+
+            <article>
+
+              <img src={asset("/images/questionnaire.png")} alt="Guided estate planning intake" />
+
+              <div>
+
+                <span>01</span>
+
+                <h3>Confidential intake</h3>
