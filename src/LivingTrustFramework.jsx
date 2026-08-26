@@ -569,3 +569,4 @@ export default function LivingTrustFramework() {
           <div className="brand">
             <span className="brandMark">LT</span>
             <span>LivingTrust Counsel</span>
+</div>
