@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { getCurrentAccount, loginAccount, registerAccount, requestPasswordReset, signOutAccount } from "./api.js";
-import { saveIntakeForm, saveTrustClauses } from "./api/trustData.js";
+import { saveIntakeForm, saveTrustClauses } from "./trustData.js";
 import "./styles.css";
 
 const TRUST_CLAUSES = [
