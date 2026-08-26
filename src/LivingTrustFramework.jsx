@@ -1,7 +1,17 @@
-import React, { useState, useEffect } from "react";
-import { getCurrentAccount, loginAccount, registerAccount, requestPasswordReset, signOutAccount } from "./api.js";
+import { useEffect, useMemo, useState } from "react";
+
+import {
+  getCurrentAccount,
+  loginAccount,
+  registerAccount,
+  requestPasswordReset
+} from "./api.js";
 import { saveIntakeForm, saveTrustClauses } from "./trustData.js";
-import "./styles.css";
+
+ 
+// -------------------------------
+// Static data
+// -------------------------------
 
 const TRUST_CLAUSES = [
   {
@@ -10,11 +20,12 @@ const TRUST_CLAUSES = [
     status: "requested",
     category: "Asset Protection",
     risk: "HIGH",
-    description: "Protects beneficiary interests from creditors, lawsuits, transfers, and poor financial decisions before distribution.",
+    description:
+      "Protects beneficiary interests from creditors, lawsuits, transfers, and poor financial decisions before distribution.",
     questionnaire: [
       "Do any beneficiaries have known creditor issues or pending lawsuits?",
       "Are there beneficiaries with spending or addiction concerns?",
-      "Should distributions be limited to health, education, maintenance and support?"
+      "Should distributions be limited to health, education, maintenance, and support?"
     ]
   },
   {
@@ -23,572 +34,649 @@ const TRUST_CLAUSES = [
     status: "requested",
     category: "Distribution Control",
     risk: "HIGH",
-    description: "Gives the trustee controlled discretion over distribution timing, amounts, and purpose of distributions.",
+    description:
+      "Gives the trustee controlled discretion over timing, amount, and purpose of distributions.",
     questionnaire: [
       "Should the trustee have sole discretion?",
-      "Should there be guidelines for trustee decisions?",
-      "What should trigger or limit trustee discretion?"
+      "Should distributions be equal or needs-based?",
+      "Should distributions be staggered by age?"
     ]
   },
   {
-    id: "dynasty",
-    name: "Dynasty Trust Clause",
-    status: "optional",
-    category: "Tax Planning",
+    id: "nocontest",
+    name: "No-Contest Clause",
+    status: "requested",
+    category: "Trust Integrity",
     risk: "MEDIUM",
-    description: "Extends trust benefits across multiple generations while minimizing estate and generation-skipping taxes.",
+    description:
+      "Discourages beneficiaries from bringing unsupported challenges to the trust.",
     questionnaire: [
-      "Do you want to provide for grandchildren?",
-      "Is multi-generational wealth transfer a goal?",
-      "Should there be generation-skipping tax planning?"
+      "Are there family members likely to contest?",
+      "Should a probable-cause exception apply?",
+      "What should a challenger forfeit?"
     ]
   },
   {
-    id: "charitable",
-    name: "Charitable Distribution Clause",
-    status: "optional",
-    category: "Philanthropy",
-    risk: "LOW",
-    description: "Directs distributions to qualified charities, providing tax benefits and philanthropic legacy.",
+    id: "bloodline",
+    name: "Bloodline Protection Clause",
+    status: "requested",
+    category: "Family Legacy",
+    risk: "MEDIUM",
+    description:
+      "Keeps inherited assets within the intended family line and defines treatment of spouses, stepchildren, and descendants.",
     questionnaire: [
-      "Which charities should benefit?",
-      "Should charitable distributions be mandatory or discretionary?",
-      "What percentage of assets should go to charity?"
+      "Should adopted or stepchildren be included?",
+      "Should divorced spouses be excluded?",
+      "Should shares pass per stirpes or per capita?"
+    ]
+  },
+  {
+    id: "incapacity",
+    name: "Incapacity Clause",
+    status: "gap",
+    category: "Grantor Protection",
+    risk: "CRITICAL",
+    description:
+      "Defines how incapacity is determined and when successor trustee authority begins.",
+    questionnaire: [
+      "Should incapacity require one physician, two physicians, or court order?",
+      "Who serves as successor trustee?",
+      "Should a trust protector supervise the transition?"
+    ]
+  },
+  {
+    id: "trusteeremoval",
+    name: "Trustee Removal & Succession",
+    status: "gap",
+    category: "Trust Governance",
+    risk: "HIGH",
+    description:
+      "Creates a court-free process for removing, replacing, and sequencing trustees.",
+    questionnaire: [
+      "Who are the first three successor trustees?",
+      "Who can remove a trustee?",
+      "Should a corporate trustee be listed as backup?"
+    ]
+  },
+  {
+    id: "protector",
+    name: "Trust Protector Clause",
+    status: "gap",
+    category: "Trust Governance",
+    risk: "MEDIUM",
+    description:
+      "Names a neutral party who can adapt the trust to law changes, trustee problems, or drafting gaps.",
+    questionnaire: [
+      "Do you want a trust protector?",
+      "What powers should the protector have?",
+      "Should the protector be an individual or committee?"
+    ]
+  },
+  {
+    id: "specialneeds",
+    name: "Special Needs Clause",
+    status: "gap",
+    category: "Beneficiary Care",
+    risk: "CRITICAL",
+    description:
+      "Protects means-tested benefits for beneficiaries with disabilities through supplemental-needs drafting.",
+    questionnaire: [
+      "Do any beneficiaries have disabilities?",
+      "Do they receive SSI, Medicaid, or other benefits?",
+      "Should a sub-trust be created?"
+    ]
+  },
+  {
+    id: "pet",
+    name: "Pet Trust Clause",
+    status: "gap",
+    category: "Beneficiary Care",
+    risk: "LOW",
+    description:
+      "Provides money, instructions, and a caregiver for pets after death or incapacity.",
+    questionnaire: [
+      "Do you have pets?",
+      "Who should care for them?",
+      "How much should be set aside?"
+    ]
+  },
+  {
+    id: "digitalassets",
+    name: "Digital Assets Clause",
+    status: "gap",
+    category: "Modern Estate Planning",
+    risk: "HIGH",
+    description:
+      "Adds RUFADAA authority for cryptocurrency, online accounts, digital files, NFTs, domains, and online businesses.",
+    questionnaire: [
+      "Do you own cryptocurrency or NFTs?",
+      "Do you have monetized online accounts?",
+      "Where is the digital asset inventory stored?"
+    ]
+  },
+  {
+    id: "taxplanning",
+    name: "Tax Planning / GST Clause",
+    status: "gap",
+    category: "Tax Optimization",
+    risk: "HIGH",
+    description:
+      "Flags estate, gift, GST, and bypass-trust planning issues for attorney review.",
+    questionnaire: [
+      "Could the estate exceed the federal exemption?",
+      "Should assets skip a generation?",
+      "Is AB trust planning needed?"
+    ]
+  },
+  {
+    id: "amendment",
+    name: "Amendment & Revocation",
+    status: "gap",
+    category: "Trust Flexibility",
+    risk: "CRITICAL",
+    description:
+      "Defines the grantor's lifetime power to amend or revoke and the formal signing process.",
+    questionnaire: [
+      "Should the trust be revocable?",
+      "Can spouses amend independently?",
+      "Should amendments require notarization?"
     ]
   },
   {
     id: "pour-over",
-    name: "Pour-Over Will Provision",
-    status: "optional",
-    category: "Estate Planning",
-    risk: "MEDIUM",
-    description: "Ensures probate assets pour into the trust for unified management and distribution.",
-    questionnaire: [
-      "Are there probate assets to funnel into the trust?",
-      "Should the will direct all residual assets to the trust?",
-      "Who should serve as executor?"
-    ]
-  },
-  {
-    id: "incentive",
-    name: "Incentive Distribution Clause",
-    status: "optional",
-    category: "Behavioral Incentives",
-    risk: "MEDIUM",
-    description: "Ties distributions to beneficiary milestones: education completion, employment, or financial responsibility.",
-    questionnaire: [
-      "Should distributions be tied to education or employment?",
-      "What behaviors should trigger or increase distributions?",
-      "Should there be financial accountability milestones?"
-    ]
-  },
-  {
-    id: "creditor-protection",
-    name: "Creditor Protection Clause",
-    status: "optional",
-    category: "Asset Protection",
-    risk: "MEDIUM",
-    description: "Protects trust assets from beneficiary creditors through restricted access and trustee controls.",
-    questionnaire: [
-      "Should creditors be prevented from accessing trust assets?",
-      "Should beneficiary creditors have limited claims?",
-      "What level of asset protection is needed?"
-    ]
-  },
-  {
-    id: "special-needs",
-    name: "Special Needs Provision",
-    status: "optional",
-    category: "Special Circumstances",
+    name: "Pour-Over Will Integration",
+    status: "gap",
+    category: "Probate Avoidance",
     risk: "CRITICAL",
-    description: "Protects supplemental needs of disabled beneficiaries without affecting government benefits eligibility.",
+    description:
+      "Creates a companion will that moves forgotten probate assets into the trust plan.",
     questionnaire: [
-      "Are there beneficiaries with special needs or disabilities?",
-      "Should provisions protect government benefit eligibility?",
-      "Should trustee have special needs expertise requirements?"
-    ]
-  },
-  {
-    id: "no-contest",
-    name: "No-Contest Clause",
-    status: "optional",
-    category: "Dispute Prevention",
-    risk: "MEDIUM",
-    description: "Penalizes beneficiaries who contest the trust, reducing litigation and family disputes.",
-    questionnaire: [
-      "Should there be penalties for contesting the trust?",
-      "What penalty amount or forfeiture is appropriate?",
-      "Are there exceptions to the no-contest clause?"
-    ]
-  },
-  {
-    id: "trustee-succession",
-    name: "Trustee Succession Plan",
-    status: "requested",
-    category: "Trust Administration",
-    risk: "HIGH",
-    description: "Clearly defines primary, secondary, and backup trustees with successor appointment mechanisms.",
-    questionnaire: [
-      "Who is the primary trustee?",
-      "Who should serve if primary trustee is unable?",
-      "Should successor trustees be family, professional, or both?"
-    ]
-  },
-  {
-    id: "tax-apportionment",
-    name: "Tax Apportionment Clause",
-    status: "optional",
-    category: "Tax Planning",
-    risk: "LOW",
-    description: "Determines how estate and income taxes are paid from trust assets or individual beneficiary distributions.",
-    questionnaire: [
-      "How should estate taxes be allocated?",
-      "Should taxes come from the principal or income?",
-      "Should distributions be tax-gross-up protected?"
-    ]
-  },
-  {
-    id: "guardian-appointment",
-    name: "Guardian Appointment Clause",
-    status: "requested",
-    category: "Minor Protection",
-    risk: "CRITICAL",
-    description: "Names guardians for minor children with backup successors and specific care instructions.",
-    questionnaire: [
-      "Who do you want as guardian for minor children?",
-      "Who should serve if primary guardian is unavailable?",
-      "Are there special care instructions or preferences?"
-    ]
-  },
-  {
-    id: "amendment-procedure",
-    name: "Amendment and Modification Clause",
-    status: "optional",
-    category: "Trust Flexibility",
-    risk: "LOW",
-    description: "Establishes procedures for amending the trust and conditions allowing modification without full reformation.",
-    questionnaire: [
-      "Should the trust be easily amendable?",
-      "Who should have amendment authority?",
-      "What triggers should allow modification?"
+      "Should the app generate a pour-over will?",
+      "Are any assets likely to remain outside the trust?",
+      "Do guardianship provisions need review?"
     ]
   }
 ];
 
-export default function LivingTrustFramework() {
-  // AUTH STATE
-  const [authOpen, setAuthOpen] = useState(false);
-  const [authMode, setAuthMode] = useState("login");
-  const [authStatus, setAuthStatus] = useState({ state: "idle", message: "" });
-  const [currentUser, setCurrentUser] = useState(null);
+ 
+const CATEGORIES = ["All", ...new Set(TRUST_CLAUSES.map((c) => c.category))];
 
-  // FORM STATE
+ 
+const STATES = [
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+  "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+  "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+  "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"
+];
+
+ 
+const ASSET_INTAKE_FIELDS = [
+  ["realEstate", "Real estate", "Home, rental, land, timeshare, mineral rights, mortgage details, deed names"],
+  ["bankAccounts", "Bank and cash accounts", "Checking, savings, CDs, money market, credit union accounts, cash kept at home"],
+  ["investmentAccounts", "Stocks, bonds, and brokerage", "Brokerage accounts, individual stocks, bonds, mutual funds, ETFs, Treasury holdings"],
+  ["retirementAccounts", "Retirement accounts", "401(k), IRA, Roth IRA, pension, annuity, beneficiary designations"],
+  ["lifeInsurance", "Life insurance", "Carrier, policy type, owner, insured, beneficiaries, approximate death benefit"],
+  ["vehicles", "Vehicles and titled property", "Cars, trucks, motorcycles, boats, RVs, trailers, aircraft, titleholder names"],
+  ["businessInterests", "Business interests", "LLC, corporation, partnership, sole proprietorship, buy-sell or operating agreement"],
+  ["firearms", "Firearms and regulated property", "Firearms, NFA items, permits, storage instructions, transfer restrictions"],
+  ["jewelryValuables", "Jewelry, collectibles, and valuables", "Jewelry, art, antiques, watches, coins, precious metals, heirlooms, appraisals"],
+  ["digitalAssets", "Digital assets and online accounts", "Crypto, wallets, domains, monetized accounts, cloud files, password manager location"],
+  ["debtsLiabilities", "Debts and liabilities", "Mortgages, loans, credit cards, tax debt, guarantees, liens, pending claims"],
+  ["safeDepositStorage", "Safe deposit, storage, and documents", "Safe deposit boxes, storage units, original deeds, titles, policies, passwords"]
+];
+
+ 
+const PRODUCT_TIERS = [
+  { id: "base", name: "Base Trust Prep", price: "$397", note: "One-time",
+    description: "Guided intake, asset inventory, review-ready document packet, funding checklist, and state execution notes.",
+    cta: "Generate base package" },
+  { id: "family", name: "Family Trust Prep", price: "$997", note: "One-time",
+    description: "Expanded intake for couples, blended families, minor children, multiple asset classes, and trustee instructions.",
+    cta: "Generate family package" },
+  { id: "maintenance", name: "Annual Maintenance", price: "$149", note: "Per year",
+    description: "Annual asset refresh, beneficiary review reminders, trust update prompts, and organized change history.",
+    cta: "Start annual maintenance" }
+];
+
+ 
+const STATE_RESOURCES = [
+  ["AL","Alabama","alabama"],["AK","Alaska","alaska"],["AZ","Arizona","arizona"],["AR","Arkansas","arkansas"],["CA","California","california"],
+  ["CO","Colorado","colorado"],["CT","Connecticut","connecticut"],["DE","Delaware","delaware"],["FL","Florida","florida"],["GA","Georgia","georgia"],
+  ["HI","Hawaii","hawaii"],["ID","Idaho","idaho"],["IL","Illinois","illinois"],["IN","Indiana","indiana"],["IA","Iowa","iowa"],
+  ["KS","Kansas","kansas"],["KY","Kentucky","kentucky"],["LA","Louisiana","louisiana"],["ME","Maine","maine"],["MD","Maryland","maryland"],
+  ["MA","Massachusetts","massachusetts"],["MI","Michigan","michigan"],["MN","Minnesota","minnesota"],["MS","Mississippi","mississippi"],["MO","Missouri","missouri"],
+  ["MT","Montana","montana"],["NE","Nebraska","nebraska"],["NV","Nevada","nevada"],["NH","New Hampshire","new-hampshire"],["NJ","New Jersey","new-jersey"],
+  ["NM","New Mexico","new-mexico"],["NY","New York","new-york"],["NC","North Carolina","north-carolina"],["ND","North Dakota","north-dakota"],["OH","Ohio","ohio"],
+  ["OK","Oklahoma","oklahoma"],["OR","Oregon","oregon"],["PA","Pennsylvania","pennsylvania"],["RI","Rhode Island","rhode-island"],["SC","South Carolina","south-carolina"],
+  ["SD","South Dakota","south-dakota"],["TN","Tennessee","tennessee"],["TX","Texas","texas"],["UT","Utah","utah"],["VT","Vermont","vermont"],
+  ["VA","Virginia","virginia"],["WA","Washington","washington"],["WV","West Virginia","west-virginia"],["WI","Wisconsin","wisconsin"],["WY","Wyoming","wyoming"]
+].map(([code, name, slug]) => ({
+  code,
+  name,
+  guide: `https://www.findlaw.com/state/${slug}-law.html`,
+  findLaw: `https://lawyers.findlaw.com/estate-planning/${slug}/`,
+  justia: `https://www.justia.com/lawyers/estate-planning/${slug}`,
+  superLawyers: `https://attorneys.superlawyers.com/estate-planning-and-probate/${slug}/`,
+  avvo: `https://www.avvo.com/estate-planning-lawyer/${code.toLowerCase()}.html`,
+  google: `https://www.google.com/search?q=${encodeURIComponent(`${name} living trust estate planning attorney`)}`,
+  aba: "https://www.americanbar.org/groups/lawyer_referral/resources/lawyer-referral-directory/"
+}));
+
+ 
+const riskClass = {
+  CRITICAL: "risk critical",
+  HIGH: "risk high",
+  MEDIUM: "risk medium",
+  LOW: "risk low"
+};
+
+ 
+const asset = (path) => `${import.meta.env.BASE_URL}${path.replace(/^\//, "")}`;
+
+ 
+// -------------------------------
+// Component
+// -------------------------------
+
+export default function LivingTrustFramework() {
+  const path = window.location.pathname.toLowerCase();
+  const isGeneratorRoute = path.includes("/livingtrust");
+  const params = new URLSearchParams(window.location.search);
+  const returnNotice = params.get("trustId")
+    ? `Trust intake ${params.get("trustId")} was received. Attorney review and document delivery require the production backend credentials to be configured.`
+    : "";
+
+ 
+  const [activeTab, setActiveTab] = useState(isGeneratorRoute ? "start" : "landing");
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("livingtrust_user") || "null");
+    } catch (_error) {
+      return null;
+    }
+  });
+  const [authMode, setAuthMode] = useState("login");
+  const [authOpen, setAuthOpen] = useState(isGeneratorRoute && !user);
+  const [authForm, setAuthForm] = useState({ fullName: "", email: "", password: "" });
+  const [authStatus, setAuthStatus] = useState({ state: "idle", message: "" });
+
+ 
+  const [accountTrusts, setAccountTrusts] = useState([]);
+  const [category, setCategory] = useState("All");
+  const [expanded, setExpanded] = useState("incapacity");
+  const [selected, setSelected] = useState(() => TRUST_CLAUSES.map((c) => c.id));
+  const [selectedTier, setSelectedTier] = useState("base");
+
+ 
   const [form, setForm] = useState({
     fullName: "",
     email: "",
     state: "CA",
+    address: "",
+    trustType: "Individual revocable living trust",
     successorTrustee: "",
     beneficiaries: "",
-    distributionPlan: ""
+    distributionPlan: "",
+    assetSummary: "",
+    realEstate: "",
+    bankAccounts: "",
+    investmentAccounts: "",
+    retirementAccounts: "",
+    lifeInsurance: "",
+    vehicles: "",
+    businessInterests: "",
+    firearms: "",
+    jewelryValuables: "",
+    digitalAssets: "",
+    debtsLiabilities: "",
+    safeDepositStorage: "",
+    beneficiaryDesignations: "",
+    excludedAssets: "",
+    specialInstructions: ""
   });
 
-  // TRUST CLAUSES STATE
-  const [selectedClauses, setSelectedClauses] = useState([]);
-  const [activeTab, setActiveTab] = useState("overview");
-  const [filterCategory, setFilterCategory] = useState("All");
+ 
+  const [status, setStatus] = useState({ state: "idle", message: "" });
+  const [assistant, setAssistant] = useState({ state: "idle", data: null, message: "" });
+  const [opsBrief, setOpsBrief] = useState({ state: "idle", data: null, message: "" });
+  const [leadBrief, setLeadBrief] = useState({ state: "idle", data: null, message: "" });
+  const [growthInput, setGrowthInput] = useState({
+    market: "California",
+    audience: "homeowners, parents, business owners, and families who want to avoid probate"
+  });
 
-  // CHECK AUTH ON MOUNT
+ 
+  const filtered = category === "All" ? TRUST_CLAUSES : TRUST_CLAUSES.filter((c) => c.category === category);
+  const criticalCount = TRUST_CLAUSES.filter((c) => c.risk === "CRITICAL").length;
+  const selectedClauses = useMemo(() => TRUST_CLAUSES.filter((c) => selected.includes(c.id)), [selected]);
+
+ 
+  // Auth-only boot: get current user; skip getMyTrusts (not implemented yet)
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const user = await getCurrentAccount();
-        setCurrentUser(user.user);
-        setAuthOpen(false);
-      } catch (error) {
-        setCurrentUser(null);
-        setAuthOpen(true);
-      }
-    };
-    checkAuth();
-  }, []);
+    const token = localStorage.getItem("livingtrust_token");
+    if (!token) return;
 
-  // UPDATE FORM FIELD
-  function updateField(e) {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+ 
+    getCurrentAccount()
+      .then(({ user: account }) => {
+        setUser(account);
+        setForm((current) => ({
+          ...current,
+          fullName: current.fullName || account?.fullName || "",
+          email: current.email || account?.email || ""
+        }));
+        // Temporary: trusts not loaded until backend is added
+        setAccountTrusts([]);
+      })
+      .catch(() => {
+        localStorage.removeItem("livingtrust_token");
+        localStorage.removeItem("livingtrust_user");
+        setUser(null);
+        if (isGeneratorRoute) setAuthOpen(true);
+      });
+  }, [isGeneratorRoute]);
+
+ 
+  function updateField(event) {
+    setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
   }
 
-  // SUBMIT AUTH (LOGIN/REGISTER)
-  async function submitAuth(e) {
-    e.preventDefault();
-    const email = form.email.trim();
-    const password = form.password?.trim() || "";
+ 
+  function updateAuthField(event) {
+    setAuthForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+  }
 
-    if (!email) {
-      setAuthStatus({ state: "error", message: "Email required." });
-      return;
-    }
+ 
+  async function submitAuth(event) {
+    event.preventDefault();
+    setAuthStatus({
+      state: "loading",
+      message: authMode === "register" ? "Creating account..." : "Signing in..."
+    });
 
-    setAuthStatus({ state: "loading", message: authMode === "login" ? "Signing in..." : "Creating account..." });
-
+ 
     try {
-      let result;
-      if (authMode === "login") {
-        result = await loginAccount({ email, password });
-      } else {
-        result = await registerAccount({ email, password, fullName: form.fullName });
-      }
+      const action = authMode === "register" ? registerAccount : loginAccount;
+      const { user: account } = await action(authForm);
 
-      setCurrentUser(result.user);
+ 
+      setUser(account);
       setAuthOpen(false);
-      setAuthStatus({ state: "idle", message: "" });
-      setForm({ fullName: "", email: "", state: "CA", successorTrustee: "", beneficiaries: "", distributionPlan: "" });
+      setAuthStatus({ state: "success", message: "Signed in." });
+
+ 
+      setForm((current) => ({
+        ...current,
+        fullName: current.fullName || account?.fullName || authForm.fullName || "",
+        email: current.email || account?.email || authForm.email || ""
+      }));
+
+ 
+      // trusts will load later when backend features are added
+      setAccountTrusts([]);
+      if (!isGeneratorRoute) window.location.href = "/livingtrust/";
     } catch (error) {
       setAuthStatus({ state: "error", message: error.message });
     }
   }
 
-  // SUBMIT INTAKE FORM - NOW WITH DATABASE SAVE
-  async function submitIntake(e) {
-    e.preventDefault();
+ 
+  async function sendResetEmail() {
+    if (!authForm.email) {
+      setAuthStatus({ state: "error", message: "Enter your email first." });
+      return;
+    }
+    setAuthStatus({ state: "loading", message: "Sending reset link..." });
+    try {
+      const result = await requestPasswordReset({ email: authForm.email });
+      setAuthStatus({ state: "success", message: result.message });
+    } catch (error) {
+      setAuthStatus({ state: "error", message: error.message });
+    }
+  }
 
-    if (!form.fullName || !form.email) {
-      setAuthStatus({ state: "error", message: "Name and email required." });
+ 
+  function signOut() {
+    localStorage.removeItem("livingtrust_token");
+    localStorage.removeItem("livingtrust_user");
+    setUser(null);
+    setAccountTrusts([]);
+    if (isGeneratorRoute) setAuthOpen(true);
+  }
+
+ 
+  function startIntake() {
+    if (!user) {
+      setAuthOpen(true);
+      return;
+    }
+    if (!isGeneratorRoute) window.location.href = "/livingtrust/";
+    else setActiveTab("start");
+  }
+
+ 
+  function toggleClause(id) {
+    setSelected((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  }
+
+ 
+  function buildAssetSchedule() {
+    return ASSET_INTAKE_FIELDS
+      .map(([key, label]) => ({ type: label, description: (form[key] || "").trim() }))
+      .filter((asset) => asset.description);
+  }
+
+ 
+  // --- Database persistence for submitPackage ---
+  async function submitPackage(event) {
+    event.preventDefault();
+
+    if (!user || !user.id) {
+      setStatus({ state: "error", message: "User not authenticated." });
       return;
     }
 
-    setAuthStatus({ state: "loading", message: "Saving intake..." });
+    setStatus({ state: "loading", message: "Saving your intake..." });
 
     try {
-      // Get current user ID from state
-      if (!currentUser || !currentUser.id) {
-        setAuthStatus({ state: "error", message: "User not authenticated." });
-        return;
-      }
-
-      // SAVE TO SUPABASE DATABASE
-      await saveIntakeForm(currentUser.id, {
+      // Save intake form to database
+      await saveIntakeForm(user.id, {
         fullName: form.fullName,
         email: form.email,
         state: form.state,
+        address: form.address,
+        trustType: form.trustType,
         successorTrustee: form.successorTrustee,
         beneficiaries: form.beneficiaries,
-        distributionPlan: form.distributionPlan
+        distributionPlan: form.distributionPlan,
+        assetSummary: form.assetSummary,
+        realEstate: form.realEstate,
+        bankAccounts: form.bankAccounts,
+        investmentAccounts: form.investmentAccounts,
+        retirementAccounts: form.retirementAccounts,
+        lifeInsurance: form.lifeInsurance,
+        vehicles: form.vehicles,
+        businessInterests: form.businessInterests,
+        firearms: form.firearms,
+        jewelryValuables: form.jewelryValuables,
+        digitalAssets: form.digitalAssets,
+        debtsLiabilities: form.debtsLiabilities,
+        safeDepositStorage: form.safeDepositStorage,
+        beneficiaryDesignations: form.beneficiaryDesignations,
+        excludedAssets: form.excludedAssets,
+        specialInstructions: form.specialInstructions
       });
 
-      setAuthStatus({ state: "success", message: "Intake saved successfully!" });
-      setTimeout(() => setAuthStatus({ state: "idle", message: "" }), 3000);
+      // Save selected clauses to database
+      await saveTrustClauses(user.id, selected);
+
+      setStatus({
+        state: "success",
+        message: "Intake saved successfully! Document generation coming soon."
+      });
     } catch (error) {
-      console.error("Error saving intake:", error);
-      setAuthStatus({ state: "error", message: "Failed to save intake: " + error.message });
+      console.error("Error saving package:", error);
+      setStatus({ state: "error", message: "Failed to save: " + error.message });
     }
   }
 
-  // SAVE SELECTED CLAUSES
-  async function handleSaveClauses() {
-    if (!currentUser || !currentUser.id) {
-      setAuthStatus({ state: "error", message: "User not authenticated." });
-      return;
-    }
-
-    try {
-      await saveTrustClauses(currentUser.id, selectedClauses);
-      setAuthStatus({ state: "success", message: "Clauses saved successfully!" });
-      setTimeout(() => setAuthStatus({ state: "idle", message: "" }), 3000);
-    } catch (error) {
-      console.error("Error saving clauses:", error);
-      setAuthStatus({ state: "error", message: "Failed to save clauses: " + error.message });
-    }
+ 
+  async function startMaintenanceCheckout() {
+    setStatus({
+      state: "error",
+      message: "Maintenance checkout is not enabled yet. Connect Stripe via a backend or Edge Function."
+    });
   }
 
-  // TOGGLE CLAUSE SELECTION
-  function toggleClause(clauseId) {
-    setSelectedClauses((prev) =>
-      prev.includes(clauseId) ? prev.filter((id) => id !== clauseId) : [...prev, clauseId]
-    );
+ 
+  async function requestIntakeHelp() {
+    setAssistant({
+      state: "error",
+      data: null,
+      message: "Intake assistant is not enabled yet. Wire to a backend or Edge Function."
+    });
   }
 
-  // SIGN OUT
-  async function handleSignOut() {
-    await signOutAccount();
-    setCurrentUser(null);
-    setAuthOpen(true);
+ 
+  async function saveDraftForFollowUp() {
+    setAssistant({
+      state: "error",
+      data: assistant.data,
+      message: "Draft-saving is not enabled yet. Wire to a backend or Edge Function."
+    });
   }
 
-  // FILTERED CLAUSES
-  const filteredClauses =
-    filterCategory === "All" ? TRUST_CLAUSES : TRUST_CLAUSES.filter((c) => c.category === filterCategory);
+ 
+  async function loadOperationsBrief() {
+    setOpsBrief({
+      state: "error",
+      data: null,
+      message: "Operations brief is not enabled yet. Wire to a backend or Edge Function."
+    });
+  }
 
-  // CATEGORIES
-  const categories = ["All", ...new Set(TRUST_CLAUSES.map((c) => c.category))];
+ 
+  async function createLeadBrief() {
+    setLeadBrief({
+      state: "error",
+      data: null,
+      message: "Lead brief is not enabled yet. Wire to a backend or Edge Function."
+    });
+  }
 
+  // --- End database persistence ---
+
+ 
   return (
-    <div className="framework">
-      {/* NAV */}
-      <header className="nav">
-        <div className="navContent">
-          <h1 className="logo">LT Living Counsel</h1>
-          {currentUser && (
-            <div className="navUser">
-              <span>Welcome, {currentUser.fullName || currentUser.email}</span>
-              <button className="signOutBtn" onClick={handleSignOut}>
-                Sign Out
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+    <main>
+      <UPLBar />
+      <section className="hero" style={{ backgroundImage: `url("${asset("/images/trust-hero.png")}")` }}>
+        <div className="heroShade" />
 
-      {/* AUTH MODAL */}
+        <nav className="nav">
+          <div className="brand">
+            <span className="brandMark">LT</span>
+            <span>LivingTrust Counsel</span>
+          </div>
+
+          <div className="navLinks">
+            <button onClick={() => setActiveTab("landing")}>Overview</button>
+            <button onClick={startIntake}>Intake</button>
+            <button onClick={() => setActiveTab("clauses")}>Protections</button>
+            <button onClick={() => setActiveTab("legal")}>Review</button>
+            <button onClick={() => setActiveTab("resources")}>Resources</button>
+            <button onClick={() => setActiveTab("command")}>Case Desk</button>
+            <button onClick={() => setActiveTab("marketing")}>Marketing</button>
+            {user ? <button onClick={signOut}>Sign Out</button> : <button onClick={() => setAuthOpen(true)}>Sign In</button>}
+          </div>
+        </nav>
+
+ 
+        <div className="heroContent">
+          <span className="eyebrow">Estate planning document preparation with attorney-ready files</span>
+          <h1>Protect your family plan before probate decides for you.</h1>
+          <p>
+            Prepare a state-specific living trust package, organize your successor trustee instructions, and create a
+            clean review file to discuss with a licensed attorney before signing.
+          </p>
+
+          <div className="heroActions">
+            <button className="primary" onClick={startIntake}>Start confidential intake</button>
+            <button className="secondary" onClick={() => setActiveTab("landing")}>Review the process</button>
+          </div>
+
+          <div className="heroCredentials">
+            <span>Revocable living trust</span>
+            <span>Pour-over will</span>
+            <span>Certificate of trust</span>
+            <span>Funding instructions</span>
+          </div>
+        </div>
+      </section>
+
+ 
+      <section className="metrics">
+        <Metric label="State rule library" value="50" />
+        <Metric label="Estate documents" value="4" />
+        <Metric label="Review-ready file" value="1 hr" />
+        <Metric label="Annual plan reminders" value="1 yr" />
+      </section>
+
+ 
+      {returnNotice && (
+        <section className="workspace">
+          <div className="noticePanel">
+            <strong>Submission received</strong>
+            <p>{returnNotice}</p>
+          </div>
+        </section>
+      )}
+
+ 
+      {user && (
+        <section className="accountBar">
+          <div>
+            <strong>{user.fullName || user.email}</strong>
+            <span>{accountTrusts.length} saved trust{accountTrusts.length === 1 ? "" : "s"}</span>
+          </div>
+          <button className="quietButton" onClick={startIntake}>Continue intake</button>
+        </section>
+      )}
+
+ 
       {authOpen && (
-        <div className="authModal">
+        <div className="authOverlay">
           <form className="authPanel" onSubmit={submitAuth}>
-            <h2>SIGN IN</h2>
-            <p>Sign in to continue your trust intake.</p>
-            <div className="formGroup">
-              <label>Email</label>
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={updateField}
-                required
-              />
-            </div>
-            <div className="formGroup">
-              <label>Password</label>
-              <input
-                type="password"
-                name="password"
-                value={form.password || ""}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                required
-              />
-            </div>
-            <button type="submit" className="primaryBtn" disabled={authStatus.state === "loading"}>
-              {authStatus.state === "loading" ? "Signing in..." : "Sign In"}
+            <button type="button" className="authClose" onClick={() => !isGeneratorRoute && setAuthOpen(false)}>×</button>
+            <span className="eyebrow dark">{authMode === "register" ? "Create account" : "Sign in"}</span>
+            <h2>{authMode === "register" ? "Create your private trust account." : "Sign in to continue your trust intake."}</h2>
+            <p>Your account saves your intake and connects completed trust packages to your profile.</p>
+            {authMode === "register" && (
+              <label>Full name<input name="fullName" value={authForm.fullName} onChange={updateAuthField} autoComplete="name" /></label>
+            )}
+            <label>Email<input required type="email" name="email" value={authForm.email} onChange={updateAuthField} autoComplete="email" /></label>
+            <label>Password<input required type="password" name="password" value={authForm.password} onChange={updateAuthField} autoComplete={authMode === "register" ? "new-password" : "current-password"} /></label>
+            <button className="primary" disabled={authStatus.state === "loading"}>{authMode === "register" ? "Create Account" : "Sign In"}</button>
+            <button type="button" className="quietButton" onClick={() => setAuthMode(authMode === "register" ? "login" : "register")}>
+              {authMode === "register" ? "I already have an account" : "Create an account"}
             </button>
-            <p className="authToggle">
-              Don't have an account?{" "}
-              <a
-                onClick={() => {
-                  setAuthMode("register");
-                  setAuthStatus({ state: "idle", message: "" });
-                }}
-              >
-                Create one
-              </a>
-            </p>
+            <button type="button" className="linkButton" onClick={sendResetEmail}>Forgot password?</button>
             {authStatus.message && <p className={`status ${authStatus.state}`}>{authStatus.message}</p>}
           </form>
         </div>
       )}
 
-      {/* MAIN CONTENT */}
-      {!authOpen && currentUser && (
-        <div className="content">
-          {/* HERO */}
-          <section className="hero">
-            <h1>Protect your family plan before probate decides for you.</h1>
-            <p>
-              Prepare a state-specific living trust package, organize your successor trustee instructions, and create a
-              clean review file to discuss with a licensed attorney before signing.
-            </p>
-            <div className="stats">
-              <div className="stat">
-                <h3>50</h3>
-                <p>State Rule Library</p>
-              </div>
-              <div className="stat">
-                <h3>4</h3>
-                <p>Estate Documents</p>
-              </div>
-              <div className="stat">
-                <h3>1 hr</h3>
-                <p>Homes-ready File</p>
-              </div>
-              <div className="stat">
-                <h3>1 yr</h3>
-                <p>Annual Plan Reminders</p>
-              </div>
+ 
+      {(activeTab === "landing" || activeTab === "start") && (
+        <section className="workspace landingStack">
+          <div className="attorneyIntro">
+            <div>
+              <span className="eyebrow dark">Professional estate-planning workflow</span>
             </div>
-            <button className="ctaBtn" onClick={() => setActiveTab("intake")}>
-              Start confidential intake
-            </button>
-          </section>
-
-          {/* TABS */}
-          <section className="tabs">
-            <button
-              className={`tab ${activeTab === "overview" ? "active" : ""}`}
-              onClick={() => setActiveTab("overview")}
-            >
-              Overview
-            </button>
-            <button className={`tab ${activeTab === "intake" ? "active" : ""}`} onClick={() => setActiveTab("intake")}>
-              Intake
-            </button>
-            <button
-              className={`tab ${activeTab === "protections" ? "active" : ""}`}
-              onClick={() => setActiveTab("protections")}
-            >
-              Protections
-            </button>
-          </section>
-
-          {/* OVERVIEW TAB */}
-          {activeTab === "overview" && (
-            <section className="tabContent overview">
-              <h2>How It Works</h2>
-              <div className="processSteps">
-                <div className="step">
-                  <h3>1. Build your vault</h3>
-                  <p>
-                    Answer guided questions by section: childhood, family, work, beliefs, recipes, photos, videos,
-                    letters, finances, digital life, and final wishes.
-                  </p>
-                </div>
-                <div className="step">
-                  <h3>2. Seal it privately</h3>
-                  <p>
-                    Your saved profile is tied to your login. You can keep editing until you are ready to seal it for
-                    delivery.
-                  </p>
-                </div>
-                <div className="step">
-                  <h3>3. Release by death trigger</h3>
-                  <p>
-                    The death-record monitor checks for a confirmed match. After confirmation and a hold period, the
-                    right people receive the right sections.
-                  </p>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* INTAKE TAB */}
-          {activeTab === "intake" && (
-            <section className="tabContent intake">
-              <h2>Confidential Intake</h2>
-              <p>Your information is private and secure. We'll use this to prepare your estate planning documents.</p>
-
-              <form className="formShell" onSubmit={submitIntake}>
-                <div className="formGrid">
-                  <div className="formGroup">
-                    <label>Full Name</label>
-                    <input
-                      type="text"
-                      name="fullName"
-                      value={form.fullName}
-                      onChange={updateField}
-                      required
-                    />
-                  </div>
-
-                  <div className="formGroup">
-                    <label>Email</label>
-                    <input type="email" name="email" value={form.email} onChange={updateField} required />
-                  </div>
-
-                  <div className="formGroup">
-                    <label>State</label>
-                    <select name="state" value={form.state} onChange={updateField}>
-                      <option value="CA">CA</option>
-                      <option value="NY">NY</option>
-                      <option value="TX">TX</option>
-                      <option value="FL">FL</option>
-                    </select>
-                  </div>
-
-                  <div className="formGroup">
-                    <label>Successor Trustee</label>
-                    <input
-                      type="text"
-                      name="successorTrustee"
-                      value={form.successorTrustee}
-                      onChange={updateField}
-                      placeholder="Name and relationship"
-                    />
-                  </div>
-
-                  <div className="formGroup">
-                    <label>Beneficiaries</label>
-                    <textarea
-                      name="beneficiaries"
-                      value={form.beneficiaries}
-                      onChange={updateField}
-                      placeholder="Names, relationships, and share amounts"
-                    />
-                  </div>
-
-                  <div className="formGroup">
-                    <label>Distribution Plan</label>
-                    <textarea
-                      name="distributionPlan"
-                      value={form.distributionPlan}
-                      onChange={updateField}
-                      placeholder="How and when should assets be distributed"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="primaryBtn"
-                  style={{ marginTop: "24px" }}
-                  disabled={authStatus.state === "loading"}
-                >
-                  {authStatus.state === "loading" ? "Saving..." : "Submit Intake"}
-                </button>
-
-                {authStatus.message && <p className={`status ${authStatus.state}`}>{authStatus.message}</p>}
-              </form>
-            </section>
-          )}
-
-          {/* PROTECTIONS TAB */}
-          {activeTab === "protections" && (
-            <section className="tabContent protections">
-              <h2>Trust Protections</h2>
-              <p>{selectedClauses.length} CRITICAL protections need review</p>
-
-              <div className="filterBar">
-                <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="clausesGrid">
-                {filteredClauses.map((clause) => (
-                  <div key={clause.id} className="clauseCard">
-                    <input
-                      type="checkbox"
-                      checked={selectedClauses.includes(clause.id)}
-                      onChange={() => toggleClause(clause.id)}
-                    />
-                    <h3>{clause.name}</h3>
-                    <p className={`risk ${clause.risk.toLowerCase()}`}>{clause.risk}</p>
-                    <p>{clause.description}</p>
-                    <div className="questionnaire">
-                      {clause.questionnaire.map((q, idx) => (
-                        <p key={idx}>• {q}</p>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <button className="primaryBtn" onClick={handleSaveClauses} style={{ marginTop: "24px" }}>
-                Save Selected Protections
-              </button>
-            </section>
-          )}
-        </div>
+          </div>
+        </section>
       )}
-    </div>
+    </main>
   );
 }
