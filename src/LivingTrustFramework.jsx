@@ -190,22 +190,28 @@ const STATES = [
   "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"
 ];
 
-const ASSET_INTAKE_FIELDS = [
-  ["realEstate", "Real estate", "Home, rental, land, timeshare, mineral rights, mortgage details, deed names"],
-  ["bankAccounts", "Bank and cash accounts", "Checking, savings, CDs, money market, credit union accounts, cash kept at home"],
-  ["investmentAccounts", "Stocks, bonds, and brokerage", "Brokerage accounts, individual stocks, bonds, mutual funds, ETFs, Treasury holdings"],
-  ["retirementAccounts", "Retirement accounts", "401(k), IRA, Roth IRA, pension, annuity, beneficiary designations"],
-  ["lifeInsurance", "Life insurance", "Carrier, policy type, owner, insured, beneficiaries, approximate death benefit"],
-  ["vehicles", "Vehicles and titled property", "Cars, trucks, motorcycles, boats, RVs, trailers, aircraft, titleholder names"],
-  ["businessInterests", "Business interests", "LLC, corporation, partnership, sole proprietorship, buy-sell or operating agreement"],
-  ["firearms", "Firearms and regulated property", "Firearms, NFA items, permits, storage instructions, transfer restrictions"],
-  ["jewelryValuables", "Jewelry, collectibles, and valuables", "Jewelry, art, antiques, watches, coins, precious metals, heirlooms, appraisals"],
-  ["digitalAssets", "Digital assets and online accounts", "Crypto, wallets, domains, monetized accounts, cloud files, password manager location"],
-  ["debtsLiabilities", "Debts and liabilities", "Mortgages, loans, credit cards, tax debt, guarantees, liens, pending claims"],
-  ["safeDepositStorage", "Safe deposit, storage, and documents", "Safe deposit boxes, storage units, original deeds, titles, policies, passwords"]
-];
-
-const asset = (path) => `${import.meta.env.BASE_URL}${path.replace(/^\//, "")}`;
+const STATE_RESOURCES = {
+  "CA": {
+    attorneys: ["California State Bar - Referral Service", "San Francisco Bar Association"],
+    guides: "California Trust Law, Probate Code §13050+",
+    requirements: "Notarization required, self-proving affidavit recommended"
+  },
+  "TX": {
+    attorneys: ["State Bar of Texas - Lawyer Referral", "Houston Bar Association"],
+    guides: "Texas Trust Code (Property Code §111+)",
+    requirements: "No notarization required, but recommended"
+  },
+  "NY": {
+    attorneys: ["New York State Bar Association", "NYC Bar Association"],
+    guides: "New York Surrogate's Court Procedure Act",
+    requirements: "Notarization required for valid execution"
+  },
+  "FL": {
+    attorneys: ["Florida Bar - Lawyer Referral Service", "Miami-Dade County Bar"],
+    guides: "Florida Probate Code (Chapter 737)",
+    requirements: "Notarization and witness requirements apply"
+  }
+};
 
 export default function LivingTrustFramework() {
   const path = window.location.pathname.toLowerCase();
@@ -262,6 +268,10 @@ export default function LivingTrustFramework() {
   });
 
   const [status, setStatus] = useState({ state: "idle", message: "" });
+  const [savedDocuments, setSavedDocuments] = useState([
+    { id: 1, name: "Intake Form - John Doe", date: "Aug 26, 2024", status: "In Progress", type: "intake" },
+    { id: 2, name: "Trust Clauses Selection", date: "Aug 26, 2024", status: "Completed", type: "clauses" }
+  ]);
 
   const filtered = category === "All" ? TRUST_CLAUSES : TRUST_CLAUSES.filter((c) => c.category === category);
   const selectedClauses = useMemo(() => TRUST_CLAUSES.filter((c) => selected.includes(c.id)), [selected]);
@@ -403,15 +413,26 @@ export default function LivingTrustFramework() {
         state: "success",
         message: "Intake saved successfully! Document generation coming soon."
       });
+
+      setSavedDocuments([
+        { id: Date.now(), name: "Intake Form - " + form.fullName, date: new Date().toLocaleDateString(), status: "Completed", type: "intake" },
+        ...savedDocuments
+      ]);
     } catch (error) {
       console.error("Error saving package:", error);
       setStatus({ state: "error", message: "Failed to save: " + error.message });
     }
   }
 
+  const stateInfo = STATE_RESOURCES[form.state] || {
+    attorneys: ["State Bar Association", "Local Bar Association"],
+    guides: "Consult with state bar for specific requirements",
+    requirements: "Consult with licensed attorney"
+  };
+
   return (
     <main>
-      <section className="hero" style={{ backgroundImage: `url("${asset("/images/trust-hero.png")}")` }}>
+      <section className="hero" style={{ backgroundImage: `url("/images/trust-hero.png")` }}>
         <div className="heroShade" />
 
         <nav className="nav">
@@ -498,7 +519,38 @@ export default function LivingTrustFramework() {
       {activeTab === "landing" && (
         <section className="workspace">
           <h2>Living Trust Overview</h2>
-          <p>Professional estate planning workflow</p>
+          <p className="subtitle">Professional estate planning workflow with attorney-ready documents</p>
+          
+          <div className="overviewGrid">
+            <div className="overviewCard">
+              <h3>📋 Step 1: Intake</h3>
+              <p>Tell us about your family, assets, and wishes. Our questionnaire captures everything attorneys need to draft your trust.</p>
+            </div>
+            <div className="overviewCard">
+              <h3>🛡️ Step 2: Protections</h3>
+              <p>Select trust clauses that protect your family. We explain each protection and help you choose what matters most.</p>
+            </div>
+            <div className="overviewCard">
+              <h3>📝 Step 3: Review</h3>
+              <p>Review your complete trust document summary. Prepare talking points for your attorney before signing.</p>
+            </div>
+            <div className="overviewCard">
+              <h3>✍️ Step 4: Sign & Fund</h3>
+              <p>Get funding instructions to transfer assets into your trust. Includes templates and guidance for each asset type.</p>
+            </div>
+          </div>
+
+          <div className="overviewFeatures">
+            <h3>What You Get</h3>
+            <ul>
+              <li>✅ State-specific trust document (revocable living trust)</li>
+              <li>✅ Pour-over will for assets outside the trust</li>
+              <li>✅ Certificate of trust (for bank/brokerage transfers)</li>
+              <li>✅ Successor trustee instruction letter</li>
+              <li>✅ Asset funding checklist and templates</li>
+              <li>✅ Attorney review file with your selections</li>
+            </ul>
+          </div>
         </section>
       )}
 
@@ -506,13 +558,41 @@ export default function LivingTrustFramework() {
         <section className="workspace">
           <h2>Intake Form</h2>
           <form onSubmit={submitPackage}>
-            <input type="text" name="fullName" placeholder="Full Name" value={form.fullName} onChange={updateField} required />
-            <input type="email" name="email" placeholder="Email" value={form.email} onChange={updateField} required />
-            <select name="state" value={form.state} onChange={updateField}>{STATES.map(s => <option key={s} value={s}>{s}</option>)}</select>
-            <textarea name="successorTrustee" placeholder="Successor Trustee" value={form.successorTrustee} onChange={updateField} />
-            <textarea name="beneficiaries" placeholder="Beneficiaries" value={form.beneficiaries} onChange={updateField} />
-            <textarea name="distributionPlan" placeholder="Distribution Plan" value={form.distributionPlan} onChange={updateField} />
-            <button type="submit" className="primary">Save Intake</button>
+            <div className="formSection">
+              <h3>Personal Information</h3>
+              <input type="text" name="fullName" placeholder="Full Name" value={form.fullName} onChange={updateField} required />
+              <input type="email" name="email" placeholder="Email" value={form.email} onChange={updateField} required />
+              <select name="state" value={form.state} onChange={updateField}>{STATES.map(s => <option key={s} value={s}>{s}</option>)}</select>
+              <input type="text" name="address" placeholder="Address" value={form.address} onChange={updateField} />
+            </div>
+
+            <div className="formSection">
+              <h3>Trust Structure</h3>
+              <select name="trustType" value={form.trustType} onChange={updateField}>
+                <option value="Individual revocable living trust">Individual revocable living trust</option>
+                <option value="Joint marital trust">Joint marital trust</option>
+                <option value="Family trust">Family trust</option>
+                <option value="Irrevocable trust">Irrevocable trust</option>
+              </select>
+            </div>
+
+            <div className="formSection">
+              <h3>Key Roles & Distribution</h3>
+              <textarea name="successorTrustee" placeholder="Who will be your successor trustee?" value={form.successorTrustee} onChange={updateField} />
+              <textarea name="beneficiaries" placeholder="List your beneficiaries" value={form.beneficiaries} onChange={updateField} />
+              <textarea name="distributionPlan" placeholder="How should assets be distributed?" value={form.distributionPlan} onChange={updateField} />
+            </div>
+
+            <div className="formSection">
+              <h3>Assets Overview</h3>
+              <textarea name="realEstate" placeholder="Real estate (homes, rental properties, land)" value={form.realEstate} onChange={updateField} />
+              <textarea name="bankAccounts" placeholder="Bank and investment accounts" value={form.bankAccounts} onChange={updateField} />
+              <textarea name="lifeInsurance" placeholder="Life insurance policies" value={form.lifeInsurance} onChange={updateField} />
+              <textarea name="digitalAssets" placeholder="Cryptocurrency, online accounts, NFTs" value={form.digitalAssets} onChange={updateField} />
+              <textarea name="specialInstructions" placeholder="Any special wishes or instructions" value={form.specialInstructions} onChange={updateField} />
+            </div>
+
+            <button type="submit" className="primary">Save Intake Form</button>
             {status.message && <p className={`status ${status.state}`}>{status.message}</p>}
           </form>
         </section>
@@ -521,44 +601,364 @@ export default function LivingTrustFramework() {
       {activeTab === "clauses" && (
         <section className="workspace">
           <h2>Trust Protections</h2>
+          <p className="subtitle">Select which clauses to include in your trust</p>
+
+          <div className="filterBar">
+            <label>Filter by category:</label>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+          </div>
+
           <div className="clausesList">
             {filtered.map(clause => (
-              <div key={clause.id} className="clauseItem">
-                <input type="checkbox" checked={selected.includes(clause.id)} onChange={() => toggleClause(clause.id)} />
-                <h3>{clause.name}</h3>
-                <p>{clause.description}</p>
+              <div key={clause.id} className={`clauseItem ${selected.includes(clause.id) ? 'selected' : ''}`}>
+                <div className="clauseHeader">
+                  <input 
+                    type="checkbox" 
+                    checked={selected.includes(clause.id)} 
+                    onChange={() => toggleClause(clause.id)} 
+                  />
+                  <div className="clauseInfo">
+                    <h3>{clause.name}</h3>
+                    <span className={`riskBadge ${clause.risk.toLowerCase()}`}>{clause.risk}</span>
+                    <span className="categoryTag">{clause.category}</span>
+                  </div>
+                </div>
+                <p className="clauseDesc">{clause.description}</p>
+                {selected.includes(clause.id) && (
+                  <div className="clauseQuestionnaire">
+                    <p className="questLabel">Key questions:</p>
+                    <ul>
+                      {clause.questionnaire.map((q, idx) => <li key={idx}>{q}</li>)}
+                    </ul>
+                  </div>
+                )}
               </div>
             ))}
           </div>
-          <button className="primary" onClick={submitPackage}>Save Clauses</button>
+
+          <div className="clausesSummary">
+            <h3>Selection Summary</h3>
+            <p>{selected.length} clauses selected</p>
+            <div className="selectedList">
+              {selectedClauses.map(c => (
+                <span key={c.id} className="clausePill">{c.name} ✓</span>
+              ))}
+            </div>
+          </div>
+
+          <button className="primary" onClick={submitPackage}>Save Clause Selection</button>
         </section>
       )}
 
       {activeTab === "legal" && (
         <section className="workspace">
           <h2>Legal Review</h2>
-          <p>Review your trust documents with a licensed attorney</p>
+          <p className="subtitle">Review your trust document summary before attorney consultation</p>
+
+          <div className="reviewPanel">
+            <h3>Your Intake Summary</h3>
+            <div className="reviewSection">
+              <h4>Grantor Information</h4>
+              <div className="reviewField">
+                <label>Full Name:</label>
+                <p>{form.fullName || "Not provided"}</p>
+              </div>
+              <div className="reviewField">
+                <label>State of Domicile:</label>
+                <p>{form.state}</p>
+              </div>
+              <div className="reviewField">
+                <label>Successor Trustee:</label>
+                <p>{form.successorTrustee || "Not provided"}</p>
+              </div>
+            </div>
+
+            <div className="reviewSection">
+              <h4>Beneficiaries & Distribution</h4>
+              <div className="reviewField">
+                <label>Beneficiaries:</label>
+                <p>{form.beneficiaries || "Not provided"}</p>
+              </div>
+              <div className="reviewField">
+                <label>Distribution Plan:</label>
+                <p>{form.distributionPlan || "Not provided"}</p>
+              </div>
+            </div>
+
+            <div className="reviewSection">
+              <h4>Selected Protections ({selected.length} clauses)</h4>
+              <div className="selectedClauses">
+                {selectedClauses.map(c => (
+                  <div key={c.id} className="selectedClause">
+                    <strong>{c.name}</strong>
+                    <span className="riskBadge">{c.risk}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="reviewActions">
+              <button className="secondary" onClick={() => setActiveTab("start")}>Edit Intake</button>
+              <button className="secondary" onClick={() => setActiveTab("clauses")}>Edit Clauses</button>
+              <button className="primary">Download Review Document</button>
+            </div>
+          </div>
+
+          <div className="nextSteps">
+            <h3>Next Steps</h3>
+            <ol>
+              <li>Review this document with a licensed estate planning attorney</li>
+              <li>Make any changes to your selections</li>
+              <li>Execute the trust documents with proper notarization</li>
+              <li>Use our funding checklist to transfer assets into the trust</li>
+              <li>Store the trust document safely (typically with your attorney)</li>
+            </ol>
+          </div>
         </section>
       )}
 
       {activeTab === "resources" && (
         <section className="workspace">
           <h2>Resources & Guides</h2>
-          <p>State-specific resources and attorney referrals</p>
+          <p className="subtitle">State-specific information and attorney referrals</p>
+
+          <div className="resourcesGrid">
+            <div className="resourceCard">
+              <h3>📋 {form.state} Trust Law Requirements</h3>
+              <div className="resourceContent">
+                <p><strong>Law Reference:</strong> {stateInfo.guides}</p>
+                <p><strong>Execution Requirements:</strong> {stateInfo.requirements}</p>
+              </div>
+            </div>
+
+            <div className="resourceCard">
+              <h3>⚖️ Find an Attorney</h3>
+              <div className="resourceContent">
+                <p>Recommended bar associations for {form.state}:</p>
+                <ul>
+                  {stateInfo.attorneys.map((attorney, idx) => <li key={idx}>{attorney}</li>)}
+                </ul>
+                <p className="resourceHint">Call your state bar for certified estate planning specialists in your area.</p>
+              </div>
+            </div>
+
+            <div className="resourceCard">
+              <h3>📚 Learning Resources</h3>
+              <div className="resourceContent">
+                <ul>
+                  <li><strong>Revocable vs. Irrevocable:</strong> Understand when each is appropriate</li>
+                  <li><strong>Pour-Over Will:</strong> How it works with your trust</li>
+                  <li><strong>Funding Your Trust:</strong> Step-by-step asset transfer guide</li>
+                  <li><strong>Beneficiary Designations:</strong> How they interact with your trust</li>
+                  <li><strong>Tax Planning:</strong> Estate and gift tax considerations</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="resourceCard">
+              <h3>🔍 Key Definitions</h3>
+              <div className="resourceContent">
+                <dl>
+                  <dt><strong>Grantor:</strong></dt>
+                  <dd>The person creating the trust (you)</dd>
+                  
+                  <dt><strong>Trustee:</strong></dt>
+                  <dd>The person managing trust assets</dd>
+                  
+                  <dt><strong>Successor Trustee:</strong></dt>
+                  <dd>Who takes over after you die or become incapacitated</dd>
+                  
+                  <dt><strong>Beneficiary:</strong></dt>
+                  <dd>Who receives assets from the trust</dd>
+                </dl>
+              </div>
+            </div>
+
+            <div className="resourceCard">
+              <h3>✅ Funding Checklist</h3>
+              <div className="resourceContent">
+                <p>After signing, you'll need to transfer assets:</p>
+                <ul>
+                  <li>☐ Real estate (deed transfer)</li>
+                  <li>☐ Bank accounts (new account in trust name)</li>
+                  <li>☐ Investments (retitle with brokerage)</li>
+                  <li>☐ Life insurance (change beneficiary to trust)</li>
+                  <li>☐ Vehicles (DMV title transfer)</li>
+                  <li>☐ Business interests (operating agreement update)</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="resourceCard">
+              <h3>⚠️ Common Mistakes to Avoid</h3>
+              <div className="resourceContent">
+                <ul>
+                  <li>🚫 Signing without notarization (where required)</li>
+                  <li>🚫 Not funding the trust after signing</li>
+                  <li>🚫 Naming minors as direct beneficiaries</li>
+                  <li>🚫 Forgetting to update beneficiary designations</li>
+                  <li>🚫 Not reviewing the trust every 3-5 years</li>
+                  <li>🚫 Keeping the trust document in a safe deposit box (inaccessible after death)</li>
+                </ul>
+              </div>
+            </div>
+          </div>
         </section>
       )}
 
       {activeTab === "command" && (
         <section className="workspace">
           <h2>Case Desk</h2>
-          <p>Manage your trust accounts and documents</p>
+          <p className="subtitle">Manage your trust documents and track progress</p>
+
+          {!user ? (
+            <div className="emptyState">
+              <p>Sign in to view and manage your saved trusts.</p>
+              <button className="primary" onClick={() => setAuthOpen(true)}>Sign In</button>
+            </div>
+          ) : (
+            <>
+              <div className="dashboardStats">
+                <div className="statCard">
+                  <h4>Total Trusts</h4>
+                  <p className="statValue">{savedDocuments.length}</p>
+                </div>
+                <div className="statCard">
+                  <h4>In Progress</h4>
+                  <p className="statValue">{savedDocuments.filter(d => d.status === "In Progress").length}</p>
+                </div>
+                <div className="statCard">
+                  <h4>Completed</h4>
+                  <p className="statValue">{savedDocuments.filter(d => d.status === "Completed").length}</p>
+                </div>
+              </div>
+
+              <div className="documentsTable">
+                <h3>Your Saved Documents</h3>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Document Name</th>
+                      <th>Type</th>
+                      <th>Date Saved</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {savedDocuments.map(doc => (
+                      <tr key={doc.id}>
+                        <td>{doc.name}</td>
+                        <td>{doc.type === 'intake' ? 'Intake Form' : 'Clause Selection'}</td>
+                        <td>{doc.date}</td>
+                        <td><span className={`statusBadge ${doc.status.toLowerCase().replace(' ', '')}`}>{doc.status}</span></td>
+                        <td>
+                          <button className="tableBtn">View</button>
+                          <button className="tableBtn">Download</button>
+                          <button className="tableBtn">Edit</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="caseActions">
+                <h3>Quick Actions</h3>
+                <div className="actionGrid">
+                  <button className="actionBtn" onClick={() => setActiveTab("start")}>📝 Start New Trust</button>
+                  <button className="actionBtn">📥 Import Existing Trust</button>
+                  <button className="actionBtn">📧 Share with Attorney</button>
+                  <button className="actionBtn">⬇️ Download All Documents</button>
+                </div>
+              </div>
+            </>
+          )}
         </section>
       )}
 
       {activeTab === "marketing" && (
         <section className="workspace">
-          <h2>Marketing</h2>
-          <p>Sharing and growth tools</p>
+          <h2>Share Your Plan</h2>
+          <p className="subtitle">Invite family members and refer friends</p>
+
+          <div className="marketingGrid">
+            <div className="marketingCard">
+              <h3>👨‍👩‍👧‍👦 Share with Family</h3>
+              <p>Give your family members access to your trust summary and instructions.</p>
+              <div className="shareOptions">
+                <input type="email" placeholder="Family member email" />
+                <select>
+                  <option value="viewer">View only</option>
+                  <option value="editor">Can edit</option>
+                  <option value="admin">Admin access</option>
+                </select>
+                <button className="primary">Send Invite</button>
+              </div>
+            </div>
+
+            <div className="marketingCard">
+              <h3>🔗 Share Your Referral Link</h3>
+              <p>Refer friends and earn rewards when they complete their trust.</p>
+              <div className="referralSection">
+                <input type="text" value="https://living-trust-web.onrender.com/?ref=SYDNEY123" readOnly />
+                <button className="secondary">Copy Link</button>
+              </div>
+              <p className="referralText">You have referred: <strong>3 friends</strong></p>
+            </div>
+
+            <div className="marketingCard">
+              <h3>📱 Share on Social Media</h3>
+              <p>Spread the word about estate planning.</p>
+              <div className="socialSharing">
+                <button className="socialBtn facebook">📘 Facebook</button>
+                <button className="socialBtn twitter">𝕏 Twitter</button>
+                <button className="socialBtn linkedin">💼 LinkedIn</button>
+                <button className="socialBtn email">✉️ Email</button>
+              </div>
+            </div>
+
+            <div className="marketingCard">
+              <h3>✍️ Email to Attorney</h3>
+              <p>Send your complete trust intake to your attorney for review.</p>
+              <div className="attorneyShare">
+                <input type="email" placeholder="Attorney email address" />
+                <select>
+                  <option value="intake">Intake Form Only</option>
+                  <option value="all">Complete Package</option>
+                </select>
+                <button className="primary">Send Package</button>
+              </div>
+            </div>
+
+            <div className="marketingCard">
+              <h3>📋 Print or PDF</h3>
+              <p>Download your trust summary as a PDF for offline storage.</p>
+              <div className="downloadOptions">
+                <button className="secondary">📄 Download PDF</button>
+                <button className="secondary">🖨️ Print Summary</button>
+              </div>
+            </div>
+
+            <div className="marketingCard">
+              <h3>🎯 Referral Rewards</h3>
+              <p>Get benefits when you refer others:</p>
+              <ul className="rewardsList">
+                <li>✓ 1 referral = $50 credit</li>
+                <li>✓ 3 referrals = Free attorney consultation</li>
+                <li>✓ 5+ referrals = Premium member perks</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="shareTemplate">
+            <h3>Share Message Template</h3>
+            <textarea defaultValue="Hey! I just set up my living trust to protect my family. If you haven't done this yet, it's easier than you think. Check out this tool: [your referral link]">
+            </textarea>
+            <button className="secondary">Copy Message</button>
+          </div>
         </section>
       )}
     </main>
