@@ -352,7 +352,6 @@ export default function LivingTrustFramework() {
   const selectedClauses = useMemo(() => TRUST_CLAUSES.filter((c) => selected.includes(c.id)), [selected]);
 
  
-  // Auth-only boot: get current user; skip getMyTrusts (not implemented yet)
   useEffect(() => {
     const token = localStorage.getItem("livingtrust_token");
     if (!token) return;
@@ -366,7 +365,6 @@ export default function LivingTrustFramework() {
           fullName: current.fullName || account?.fullName || "",
           email: current.email || account?.email || ""
         }));
-        // Temporary: trusts not loaded until backend is added
         setAccountTrusts([]);
       })
       .catch(() => {
@@ -413,7 +411,6 @@ export default function LivingTrustFramework() {
       }));
 
  
-      // trusts will load later when backend features are added
       setAccountTrusts([]);
       if (!isGeneratorRoute) window.location.href = "/livingtrust/";
     } catch (error) {
@@ -468,7 +465,6 @@ export default function LivingTrustFramework() {
   }
 
  
-  // --- Database persistence for submitPackage ---
   async function submitPackage(event) {
     event.preventDefault();
 
@@ -480,7 +476,6 @@ export default function LivingTrustFramework() {
     setStatus({ state: "loading", message: "Saving your intake..." });
 
     try {
-      // Save intake form to database
       await saveIntakeForm(user.id, {
         fullName: form.fullName,
         email: form.email,
@@ -508,7 +503,6 @@ export default function LivingTrustFramework() {
         specialInstructions: form.specialInstructions
       });
 
-      // Save selected clauses to database
       await saveTrustClauses(user.id, selected);
 
       setStatus({
@@ -565,12 +559,9 @@ export default function LivingTrustFramework() {
     });
   }
 
-  // --- End database persistence ---
-
  
   return (
     <main>
-      <UPLBar />
       <section className="hero" style={{ backgroundImage: `url("${asset("/images/trust-hero.png")}")` }}>
         <div className="heroShade" />
 
@@ -578,105 +569,3 @@ export default function LivingTrustFramework() {
           <div className="brand">
             <span className="brandMark">LT</span>
             <span>LivingTrust Counsel</span>
-          </div>
-
-          <div className="navLinks">
-            <button onClick={() => setActiveTab("landing")}>Overview</button>
-            <button onClick={startIntake}>Intake</button>
-            <button onClick={() => setActiveTab("clauses")}>Protections</button>
-            <button onClick={() => setActiveTab("legal")}>Review</button>
-            <button onClick={() => setActiveTab("resources")}>Resources</button>
-            <button onClick={() => setActiveTab("command")}>Case Desk</button>
-            <button onClick={() => setActiveTab("marketing")}>Marketing</button>
-            {user ? <button onClick={signOut}>Sign Out</button> : <button onClick={() => setAuthOpen(true)}>Sign In</button>}
-          </div>
-        </nav>
-
- 
-        <div className="heroContent">
-          <span className="eyebrow">Estate planning document preparation with attorney-ready files</span>
-          <h1>Protect your family plan before probate decides for you.</h1>
-          <p>
-            Prepare a state-specific living trust package, organize your successor trustee instructions, and create a
-            clean review file to discuss with a licensed attorney before signing.
-          </p>
-
-          <div className="heroActions">
-            <button className="primary" onClick={startIntake}>Start confidential intake</button>
-            <button className="secondary" onClick={() => setActiveTab("landing")}>Review the process</button>
-          </div>
-
-          <div className="heroCredentials">
-            <span>Revocable living trust</span>
-            <span>Pour-over will</span>
-            <span>Certificate of trust</span>
-            <span>Funding instructions</span>
-          </div>
-        </div>
-      </section>
-
- 
-      <section className="metrics">
-        <Metric label="State rule library" value="50" />
-        <Metric label="Estate documents" value="4" />
-        <Metric label="Review-ready file" value="1 hr" />
-        <Metric label="Annual plan reminders" value="1 yr" />
-      </section>
-
- 
-      {returnNotice && (
-        <section className="workspace">
-          <div className="noticePanel">
-            <strong>Submission received</strong>
-            <p>{returnNotice}</p>
-          </div>
-        </section>
-      )}
-
- 
-      {user && (
-        <section className="accountBar">
-          <div>
-            <strong>{user.fullName || user.email}</strong>
-            <span>{accountTrusts.length} saved trust{accountTrusts.length === 1 ? "" : "s"}</span>
-          </div>
-          <button className="quietButton" onClick={startIntake}>Continue intake</button>
-        </section>
-      )}
-
- 
-      {authOpen && (
-        <div className="authOverlay">
-          <form className="authPanel" onSubmit={submitAuth}>
-            <button type="button" className="authClose" onClick={() => !isGeneratorRoute && setAuthOpen(false)}>×</button>
-            <span className="eyebrow dark">{authMode === "register" ? "Create account" : "Sign in"}</span>
-            <h2>{authMode === "register" ? "Create your private trust account." : "Sign in to continue your trust intake."}</h2>
-            <p>Your account saves your intake and connects completed trust packages to your profile.</p>
-            {authMode === "register" && (
-              <label>Full name<input name="fullName" value={authForm.fullName} onChange={updateAuthField} autoComplete="name" /></label>
-            )}
-            <label>Email<input required type="email" name="email" value={authForm.email} onChange={updateAuthField} autoComplete="email" /></label>
-            <label>Password<input required type="password" name="password" value={authForm.password} onChange={updateAuthField} autoComplete={authMode === "register" ? "new-password" : "current-password"} /></label>
-            <button className="primary" disabled={authStatus.state === "loading"}>{authMode === "register" ? "Create Account" : "Sign In"}</button>
-            <button type="button" className="quietButton" onClick={() => setAuthMode(authMode === "register" ? "login" : "register")}>
-              {authMode === "register" ? "I already have an account" : "Create an account"}
-            </button>
-            <button type="button" className="linkButton" onClick={sendResetEmail}>Forgot password?</button>
-            {authStatus.message && <p className={`status ${authStatus.state}`}>{authStatus.message}</p>}
-          </form>
-        </div>
-      )}
-
- 
-      {(activeTab === "landing" || activeTab === "start") && (
-        <section className="workspace landingStack">
-          <div className="attorneyIntro">
-            <div>
-              <span className="eyebrow dark">Professional estate-planning workflow</span>
-            </div>
-          </div>
-        </section>
-      )}
-    </main>
-  );
-}
